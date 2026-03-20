@@ -70,27 +70,50 @@ export default function Dashboard() {
   const [activeTab, setActiveTab] = useState<'inconvenience' | 'national' | 'seoul' | 'travelExpense'>('inconvenience');
   const [aiAnalysis, setAiAnalysis] = useState<string>("");
   const [analyzing, setAnalyzing] = useState(false);
-  const [memoText, setMemoText] = useState<string>(() => {
-    if (typeof window !== 'undefined') {
-      const params = new URLSearchParams(window.location.search);
-      return params.get('memo') || "";
-    }
-    return "";
-  });
+  
+  // Memo State
+  const [memoText, setMemoText] = useState<string>("");
   const [isEditingMemo, setIsEditingMemo] = useState(false);
+  const [isSavingMemo, setIsSavingMemo] = useState(false);
+  const [isLoadingMemo, setIsLoadingMemo] = useState(false);
 
-  // Sync memo to URL
+  const GAS_URL = "https://script.google.com/macros/s/AKfycbxdALOssDaNm3bUqniEGZjs6vvvg6ILC77m6Y_G-C_j9OrugPnzXiR0fqSYUpY3nP8daQ/exec";
+  const selectedFilter = selectedMonth === 'ALL' ? `${selectedYear}ALL` : `${selectedYear}${String(selectedMonth).padStart(2, '0')}`;
+
+  // Fetch memo when filter changes
   useEffect(() => {
-    if (typeof window !== 'undefined') {
-      const url = new URL(window.location.href);
-      if (memoText) {
-        url.searchParams.set('memo', memoText);
-      } else {
-        url.searchParams.delete('memo');
+    const fetchMemo = async () => {
+      setIsLoadingMemo(true);
+      try {
+        const response = await fetch(`${GAS_URL}?filter=${selectedFilter}`);
+        const data = await response.json();
+        setMemoText(data.memo || "");
+      } catch (error) {
+        console.error("Failed to fetch memo:", error);
+        setMemoText("");
+      } finally {
+        setIsLoadingMemo(false);
       }
-      window.history.replaceState({}, '', url.toString());
+    };
+    fetchMemo();
+  }, [selectedFilter]);
+
+  const handleSaveMemo = async () => {
+    setIsSavingMemo(true);
+    try {
+      await fetch(GAS_URL, {
+        method: 'POST',
+        body: JSON.stringify({ filter: selectedFilter, memo: memoText })
+      });
+      setIsEditingMemo(false);
+    } catch (error) {
+      console.error("Failed to save memo:", error);
+      alert("메모 저장에 실패했습니다.");
+    } finally {
+      setIsSavingMemo(false);
     }
-  }, [memoText]);
+  };
+
   const [error, setError] = useState<string | null>(null);
 
   const loadData = async () => {
@@ -797,18 +820,45 @@ export default function Dashboard() {
             </Card>
 
             <Card 
-              title="메모" 
-              subTitle="공유 메모장"
+              title="월별 메모" 
+              subTitle={`${selectedYear}년 ${selectedMonth === 'ALL' ? '전체' : selectedMonth + '월'} 고객불편지수 메모`}
               action={
                 <button 
-                  onClick={() => setIsEditingMemo(!isEditingMemo)}
-                  className="p-2 text-neutral-500 hover:text-neutral-900 hover:bg-neutral-100 rounded-full transition-colors"
+                  onClick={isEditingMemo ? handleSaveMemo : () => setIsEditingMemo(true)}
+                  disabled={isSavingMemo || isLoadingMemo}
+                  className={cn(
+                    "px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-2",
+                    isEditingMemo 
+                      ? "bg-neutral-800 text-white hover:bg-neutral-700" 
+                      : "bg-neutral-100 text-neutral-700 hover:bg-neutral-200",
+                    (isSavingMemo || isLoadingMemo) && "opacity-50 cursor-not-allowed"
+                  )}
                 >
-                  {isEditingMemo ? <Save size={18} /> : <Pen size={18} />}
+                  {isSavingMemo ? (
+                    <>
+                      <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                      저장 중...
+                    </>
+                  ) : isEditingMemo ? (
+                    <>
+                      <Save size={16} />
+                      메모 저장
+                    </>
+                  ) : (
+                    <>
+                      <Pen size={16} />
+                      메모 수정
+                    </>
+                  )}
                 </button>
               }
             >
-              <div className="min-h-[150px] w-full bg-neutral-50 rounded-xl p-4 border border-neutral-200">
+              <div className="min-h-[150px] w-full bg-neutral-50 rounded-xl p-4 border border-neutral-200 relative">
+                {isLoadingMemo && (
+                  <div className="absolute inset-0 flex items-center justify-center bg-neutral-50/50 rounded-xl z-10">
+                    <div className="w-6 h-6 border-2 border-neutral-800 border-t-transparent rounded-full animate-spin" />
+                  </div>
+                )}
                 {isEditingMemo ? (
                   <textarea
                     value={memoText}
@@ -816,10 +866,11 @@ export default function Dashboard() {
                     className="w-full h-full min-h-[130px] bg-transparent resize-none outline-none text-neutral-800 placeholder:text-neutral-400"
                     placeholder="여기에 메모를 작성하세요..."
                     autoFocus
+                    disabled={isSavingMemo}
                   />
                 ) : (
-                  <div className="whitespace-pre-wrap text-neutral-800">
-                    {memoText || <span className="text-neutral-400 italic">작성된 메모가 없습니다. 우측 상단의 펜 아이콘을 눌러 메모를 작성해보세요.</span>}
+                  <div className="whitespace-pre-wrap text-neutral-800 min-h-[130px]">
+                    {memoText || <span className="text-neutral-400 italic">작성된 메모가 없습니다. 우측 상단의 '메모 수정' 버튼을 눌러 메모를 작성해보세요.</span>}
                   </div>
                 )}
               </div>
