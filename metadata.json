@@ -1,0 +1,5 @@
+{
+  "name": "Sidiz AS Dashboard",
+  "description": "A dashboard to monitor Sidiz after-service performance, tracking visit counts, lead times, and engineer performance.",
+  "requestFramePermissions": []
+}
